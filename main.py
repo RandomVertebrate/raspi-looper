@@ -137,14 +137,23 @@ loop3 = audioloop()
 loop4 = audioloop()
 loops = (loop1, loop2, loop3, loop4)
 
+#set_recording() schedules a loop to start recording when loop1 next restarts
 def set_recording(loop_number):
     global loops
+    already_recording = False
+    if not loop_number in (1, 2, 3, 4):
+        for loop in loops:
+            loop.isrecording = False
+            loop.iswaiting = False
+        return
+    if loops[loop_number-1].isrecording:
+        already_recording = True
     for loop in loops:
         if loop.isrecording and not loop.initialized:
             loop.initialize()
         loop.isrecording = False
         loop.iswaiting = False
-    if loop_number in (1, 2, 3, 4):
+    if not already_recording: #calling set_recording() if already recording just disables recording
         loops[loop_number-1].iswaiting = True
 
 setup_isrecording = False #set to True when track 1 recording button is first pressed
