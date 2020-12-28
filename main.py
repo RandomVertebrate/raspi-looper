@@ -22,7 +22,7 @@ INDEVICE = int(parameters[3]) #index (per pyaudio) of input device
 OUTDEVICE = int(parameters[4]) #index of output device
 print('looking for devices ' + str(INDEVICE) + ' and ' + str(OUTDEVICE))
 overshoot_in_milliseconds = int(parameters[5]) #allowance in milliseconds for pressing 'stop recording' late
-OVERSHOOT = LATENCY = round((overshoot_in_milliseconds/1000) * (RATE/CHUNK)) #allowance in buffers
+OVERSHOOT = round((overshoot_in_milliseconds/1000) * (RATE/CHUNK)) #allowance in buffers
 MAXLENGTH = int(12582912 / CHUNK) #96mb of audio in total
 LENGTH = 0 #length of the first loop, value set during first record
 
@@ -62,6 +62,7 @@ class audioloop:
         self.writep = (self.writep + 1) % self.length
     #initialize() raises self.length to closest integer multiple of LENGTH and initializes read and write pointers
     def initialize(self):
+        print('initialize called')
         if self.initialized:
             print('redundant initialization')
             return
@@ -75,6 +76,7 @@ class audioloop:
         self.incptrs()
     #dump_and_initialize() creates self.audio all at once by copying data into it
     def dump_and_initialize(self, data, length_in_buffers):
+        print('dump called')
         self.audio = np.copy(data)
         self.length = length_in_buffers
         self.writep = self.length - 1
@@ -138,15 +140,17 @@ loops = (loop1, loop2, loop3, loop4)
 
 #set_recording() schedules a loop to start recording when loop1 next restarts
 def set_recording(loop_number):
+    print('set_recording called')
     global loops
     already_recording = False
     #if invalid input just stop recording on all tracks, initialize track if needed and return
     if not loop_number in (1, 2, 3, 4):
+        print('invalid')
         for loop in loops:
-            loop.isrecording = False
-            loop.iswaiting = False
             if loop.isrecording and not loop.initialized:
                 loop.initialize()
+            loop.isrecording = False
+            loop.iswaiting = False
         return
     #if chosen track is currently recording flag it
     if loops[loop_number-1].isrecording:
