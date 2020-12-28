@@ -69,7 +69,6 @@ class audioloop:
         self.length_factor = (int((self.length - OVERSHOOT) / LENGTH) + 1)
         self.length = self.length_factor * LENGTH
         print('length ' + str(self.length))
-        #self.writep = (int(self.writep + LATENCY * CROSSSYNC)) % self.length #something ad-hoc to improve sync between tracks
         self.readp = (self.writep + LATENCY) % self.length
         self.initialized = True
         self.isplaying = True
@@ -141,39 +140,62 @@ loops = (loop1, loop2, loop3, loop4)
 def set_recording(loop_number):
     global loops
     already_recording = False
+    #if invalid input just stop recording on all tracks, initialize track if needed and return
     if not loop_number in (1, 2, 3, 4):
         for loop in loops:
             loop.isrecording = False
             loop.iswaiting = False
+            if loop.isrecording and not loop.initialized:
+                loop.initialize()
         return
+    #if chosen track is currently recording flag it
     if loops[loop_number-1].isrecording:
         already_recording = True
+    #turn off recording on all tracks
     for loop in loops:
         if loop.isrecording and not loop.initialized:
             loop.initialize()
         loop.isrecording = False
         loop.iswaiting = False
-    if not already_recording: #calling set_recording() if already recording just disables recording
+    #unless flagged, schedule recording. If chosen track was recording, then stop recording
+    #like a toggle but with delayed enabling and instant disabling
+    if not already_recording:
         loops[loop_number-1].iswaiting = True
 
 setup_isrecording = False #set to True when track 1 recording button is first pressed
+setup_donerecording = False #set to true when first track 1 recording is done
 
-def setup_callback(in_data, frame_count, time_info, status):
-    global LENGTH
-    if setup_isrecording:
-        if LENGTH >= MAXLENGTH: #if the max looping time is being exceeded, truncate the loop
-            print('setup stream loop overflow')
-            return(silence, pyaudio.paComplete)
-        tmp_clip[LENGTH, :] = np.frombuffer(in_data, dtype = np.int16) #append incoming buffer to tmp-clip
-        LENGTH = LENGTH + 1
-        return(silence, pyaudio.paContinue)
-    else:
-        return(silence, pyaudio.paContinue)
+def showstatus():
+    print('unmuted:')
+    print(str(loop1.isplaying) + str(loop2.isplaying) + str(loop3.isplaying) + str(loop4.isplaying))
+    print('recording')
+    print(str(loop1.iswaiting) + str(loop2.iswaiting) + str(loop3.iswaiting) + str(loop4.iswaiting))
 
 play_buffer = np.zeros([CHUNK], dtype = np.int16) #buffer to hold mixed audio from all 4 tracks
 
 def looping_callback(in_data, frame_count, time_info, status):
     global play_buffer
+    global setup_donerecording
+    global setup_isrecording
+    global LENGTH
+    #if setup is not done recording
+    #i.e. if the first loop hasn't been recorded yet, nothing else happens
+    if not setup_donerecording:
+        if setup_isrecording:
+            #if the max allowed loop length is exceeded, stop recording and start looping
+            if LENGTH >= MAXLENGTH:
+                print('Overflow')
+                setup_donerecording = True
+                setup_isrecording = False
+                return(silence, pyaudio.paContinue)
+            #append incoming audio to tmp_clip
+            tmp_clip[LENGTH, :] = np.frombuffer(in_data, dtype = np.int16)
+            LENGTH = LENGTH + 1
+            return(silence, pyaudio.paContinue)
+        #if first loop not currently recording and not yet recorded just wait
+        else:
+            return(silence, pyaudio.paContinue)
+    #execution ony reaches here if first loop finished recording.
     #when loop1 restarts, start recording on any tracks that are waiting
     if loop1.is_restarting():
         for loop in loops:
@@ -195,19 +217,7 @@ def looping_callback(in_data, frame_count, time_info, status):
     play_buffer[:] = (loop1.read()[:] + loop2.read()[:] + loop3.read()[:] + loop4.read()[:])/4
     return(play_buffer, pyaudio.paContinue)
 
-setup_stream = pa.open(
-    format = FORMAT,
-    channels = CHANNELS,
-    rate = RATE,
-    input = True,
-    output = False,
-    input_device_index = INDEVICE,
-    output_device_index = OUTDEVICE,
-    frames_per_buffer = CHUNK,
-    start = False,
-    stream_callback = setup_callback
-)
-
+#now initializing looping_stream (the only audio stream)
 looping_stream = pa.open(
     format = FORMAT,
     channels = CHANNELS,
@@ -217,30 +227,25 @@ looping_stream = pa.open(
     input_device_index = INDEVICE,
     output_device_index = OUTDEVICE,
     frames_per_buffer = CHUNK,
-    start = False,
+    start = True,
     stream_callback = looping_callback
 )
 
-def showstatus():
-    print('unmuted:')
-    print(str(loop1.isplaying) + str(loop2.isplaying) + str(loop3.isplaying) + str(loop4.isplaying))
-    print('recording')
-    print(str(loop1.iswaiting) + str(loop2.iswaiting) + str(loop3.iswaiting) + str(loop4.iswaiting))
+#UI record first loop
 
-setup_stream.start_stream()
 time.sleep(3)
-
 print('ready')
 
 input()
 setup_isrecording = True
 input()
-setu_isrecording = False
-setup_stream.stop_stream()
+setup_isrecording = False
+setup_donerecording = True
+print(LENGTH)
 loop1.dump_and_initialize(tmp_clip, LENGTH)
-looping_stream.start_stream()
-
 print('length is ' + str(LENGTH))
+
+#UI do everything else
 
 while True:
     showstatus()

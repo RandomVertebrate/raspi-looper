@@ -20,9 +20,16 @@ pa = pyaudio.PyAudio()
 
 silence = np.zeros(CHUNK, dtype = np.int16)
 
-click = np.zeros(CHUNK, dtype = np.int16)
+cos_arr = np.empty(CHUNK, dtype = np.float)                         #to store values of cos(i omega) at all relevant i
 for i in range(CHUNK):
-    click[i] = 32767 * (np.sin(click_ang_fr * i))                   #creating sine wave in click buffer
+    cos_arr[i] = np.cos(click_ang_fr * i)
+
+sin_arr = np.empty(CHUNK, dtype = np.float)                         #to store values of sin
+for i in range(CHUNK):
+    sin_arr[i] = np.sin(click_ang_fr * i)
+
+click = np.empty(CHUNK, dtype = np.int16)
+click = np.cast[np.int16](sin_arr * 32767)                         #creating sine wave in click buffer
 
 testclip = np.zeros([CLIPLENGTH, CHUNK], dtype = np.int16)          #stores data recorded during test
 
@@ -31,20 +38,14 @@ clicknesses = np.zeros([CLIPLENGTH], dtype = np.single)             #for storing
 clickest_buffer = 0                                                 #for storing index of most click-like buffer
 
 def clickness(buffer):                                              #calculates RMS (with resonant filter at click frequency) of a buffer
-    sincomp = 0.0
-    coscomp = 0.0
-    value = 0.0
-    for i in range(CHUNK):                                          #summation of sample[i] * sin(wi) over buffer
-        sincomp = sincomp + buffer[i] * (np.sin(click_ang_fr * i))
-    for i in range(CHUNK):                                          #summation of sample[i] * cos(wi) over buffer
-        coscomp = coscomp + buffer[i] * (np.cos(click_ang_fr * i))
-    value = (sincomp**2 + coscomp**2) / CHUNK
-    return (value**(1/2))
+    #this function is supposed to return the summation of ((f(t)*sin(t))^2 + (f(t)*cos(t))^2)/2 over the input buffer
+    return(((np.sum(np.multiply(buffer, sin_arr)))**2 + (np.sum(np.multiply(buffer, cos_arr)))**2)/2)
 
 current_buffer = -1
 #index for iteration through testclip within stream callback function.
 #will be incremented before it is used
 
+test_started = False
 
 #following stream callback function, plays 1 buffer of click followed by CLIPLENGTH - 1 buffers of silence, and simultaneously records testclip.
 def test_callback(in_data, frame_count, time_info, status):
@@ -52,6 +53,10 @@ def test_callback(in_data, frame_count, time_info, status):
     global click
     global testclip
     global current_buffer
+    global tmp_buf
+
+    if not test_started:
+        return(silence, pyaudio.paContinue)
 
     current_buffer = current_buffer + 1
 
@@ -78,17 +83,15 @@ test_stream = pa.open(
     stream_callback = test_callback
 )
 
-input('Make sure any hardware monitoring is turned OFF, then press Enter')
+print('Make sure any hardware monitoring is turned OFF and hold speaker and microphone close together.')
 
-print('Hold speaker and microphone close together...')
+test_stream.start_stream()
 
-time.sleep(4)
+input('When ready, press Enter.')
 
 print('Testing...')
 
-time.sleep(0.5)
-
-test_stream.start_stream()
+test_started = True
 while(test_stream.is_active()):
     time.sleep(0.1)
 
