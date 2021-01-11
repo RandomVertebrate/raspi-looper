@@ -4,6 +4,13 @@ print('LOADING...')
 import pyaudio
 import numpy as np
 import time
+from gpiozero import LED, Button
+
+#defining buttons and LEDs
+PLAYLEDS = (LED(2), LED(3), LED(4), LED(17))
+RECLEDS = (LED(27), LED(22), LED(10), LED(9))
+PLAYBUTTONS = (Button(11), Button(5), Button(6), Button(13))
+RECBUTTONS = (Button(19), Button(26), Button(21), Button(20))
 
 #get configuration (audio settings etc.) from file
 settings_file = open('Config/settings.prt', 'r')
@@ -139,7 +146,7 @@ loop4 = audioloop()
 loops = (loop1, loop2, loop3, loop4)
 
 #set_recording() schedules a loop to start recording when loop1 next restarts
-def set_recording(loop_number):
+def set_recording(loop_number = 0):
     print('set_recording called')
     global loops
     already_recording = False
@@ -170,10 +177,15 @@ setup_isrecording = False #set to True when track 1 recording button is first pr
 setup_donerecording = False #set to true when first track 1 recording is done
 
 def showstatus():
-    print('unmuted:')
-    print(str(loop1.isplaying) + str(loop2.isplaying) + str(loop3.isplaying) + str(loop4.isplaying))
-    print('recording')
-    print(str(loop1.iswaiting) + str(loop2.iswaiting) + str(loop3.iswaiting) + str(loop4.iswaiting))
+    for i in range(4):
+        if loops[i].isrecording:
+            RECLEDS[i].on()
+        else:
+            RECLEDS[i].off()
+        if loops[i].isplaying:
+            PLAYLEDS[i].on()
+        else:
+            PLAYLEDS[i].off()
 
 play_buffer = np.zeros([CHUNK], dtype = np.int16) #buffer to hold mixed audio from all 4 tracks
 
@@ -239,50 +251,54 @@ looping_stream = pa.open(
 
 time.sleep(3)
 print('ready')
+for led in RECLEDS:
+    led.on()
+for led in PLAYLEDS:
+    led.on()
 
-input()
+RECBUTTONS[0].wait_for_press()
 setup_isrecording = True
-input()
+for i in range(1, 4):
+    RECLEDS[i].off()
+for led in PLAYLEDS:
+    led.off()
+time.sleep(1) #allowing time for button release
+RECBUTTONS[0].wait_for_press()
 setup_isrecording = False
 setup_donerecording = True
 print(LENGTH)
 loop1.dump_and_initialize(tmp_clip, LENGTH)
 print('length is ' + str(LENGTH))
 
+showstatus()
+
 #UI do everything else
 
-while True:
-    showstatus()
-    ans = input()
-    print(ans)
-    if ans == 'q':
-        loop1.toggle_mute()
-    elif ans == 'w':
-        loop2.toggle_mute()
-    elif ans == 'e':
-        loop3.toggle_mute()
-    elif ans == 'r':
-        loop4.toggle_mute()
-    elif ans == 'x':
-        break
-    elif ans == 'a':
-        set_recording(1)
-    elif ans == 's':
-        set_recording(2)
-    elif ans == 'd':
-        set_recording(3)
-    elif ans == 'f':
-        set_recording(4)
-    elif ans == '1':
-        loop1.clear()
-    elif ans == '2':
-        loop2.clear()
-    elif ans == '3':
-        loop3.clear()
-    elif ans == '4':
-        loop4.clear()
-    else:
-        set_recording(0)
+def set_rec_1():
+    set_recording(1)
+def set_rec_2():
+    set_recording(2)
+def set_rec_3():
+    set_recording(3)
+def set_rec_4():
+    set_recording(4)
 
-looping_stream.stop_stream()
-pa.terminate()
+finished = False
+def finish():
+    global finished
+    finished = True
+
+for i in range(4):
+    RECBUTTONS[i].when_held = loops[i].clear
+    PLAYBUTTONS[i].when_pressed = loops[i].toggle_mute
+
+RECBUTTONS[0].when_pressed = set_rec_1
+RECBUTTONS[1].when_pressed = set_rec_2
+RECBUTTONS[2].when_pressed = set_rec_3
+RECBUTTONS[3].when_pressed = set_rec_4
+
+PLAYBUTTONS[3].when_held = finish
+
+while not finished:
+    time.sleep(0.3)
+    showstatus()

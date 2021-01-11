@@ -1,0 +1,23 @@
+Raspberry Pi looper pin connections:
+
++------------+----------------+-----------+
+|    Type    |    Function    |    Pin    |
++------------+----------------+-----------+
+|   Ground   |     Ground     |    GND    |
+|    LED     |  Track 1 Play  |   GPIO2   |
+|    LED     |  Track 2 Play  |   GPIO3   |
+|    LED     |  Track 3 Play  |   GPIO4   |
+|    LED     |  Track 4 Play  |   GPIO17  |
+|    LED     |  Track 1 Rec   |   GPIO27  |
+|    LED     |  Track 2 Rec   |   GPIO22  |
+|    LED     |  Track 3 Rec   |   GPIO10  |
+|    LED     |  Track 4 Rec   |   GPIO9   |
+|   Button   |  Track 1 Play  |   GPIO11  |
+|   Button   |  Track 2 Play  |   GPIO5   |
+|   Button   |  Track 3 Play  |   GPIO6   |
+|   Button   |  Track 4 Play  |   GPIO13  |
+|   Button   |  Track 1 Rec   |   GPIO19  |
+|   Button   |  Track 2 Rec   |   GPIO26  |
+|   Button   |  Track 3 Rec   |   GPIO21  |
+|   Button   |  Track 4 Rec   |   GPIO20  |
++------------+----------------+-----------+
