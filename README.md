@@ -14,4 +14,4 @@ You can run latency.py to measure your round trip latency and update the value.
 Run main.py to loop. You can add it to your .bashrc to run on boot.
 May be a good idea to tweak ALSA and Pulse audio configuration files as needed.
 
-More detail in a YouTube video probably.
+More detail in the YouTube video.
