@@ -4,6 +4,7 @@ print('LOADING...')
 import pyaudio
 import numpy as np
 import time
+import os
 from gpiozero import LED, Button
 
 #defining buttons and LEDs
@@ -289,6 +290,10 @@ def finish():
     global finished
     finished = True
 
+def restart_looper():
+    pa.terminate()
+    os.execlp('python3', 'python3', 'main.py')
+
 for i in range(4):
     RECBUTTONS[i].when_held = loops[i].clear
     PLAYBUTTONS[i].when_pressed = loops[i].toggle_mute
@@ -299,7 +304,11 @@ RECBUTTONS[2].when_pressed = set_rec_3
 RECBUTTONS[3].when_pressed = set_rec_4
 
 PLAYBUTTONS[3].when_held = finish
+PLAYBUTTONS[0].when_held = restart_looper
 
 while not finished:
-    time.sleep(0.3)
     showstatus()
+    time.sleep(0.3)
+
+pa.terminate()
+print('Done...')
