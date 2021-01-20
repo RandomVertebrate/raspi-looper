@@ -15,6 +15,7 @@ Run main.py to loop. You can add it to your .bashrc to run on boot.
 May be a good idea to tweak ALSA and Pulse audio configuration files as needed.
 
 Buttons' Functions:
+
     Press 'record' button: Start waiting to record/overdub, stop recording/overdubbing.
     Hold 'record' button: Clear track.
     Press 'play' button: Mute/Unmute track.
