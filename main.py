@@ -48,6 +48,7 @@ class audioloop:
         self.initialized = False
         self.length_factor = 1
         self.length = 0
+        #self.audio is a 2D array of samples, each row is a buffer's worth of audio
         self.audio = np.zeros([MAXLENGTH, CHUNK], dtype = np.int16)
         self.readp = 0
         self.writep = 0
@@ -78,11 +79,13 @@ class audioloop:
         self.length_factor = (int((self.length - OVERSHOOT) / LENGTH) + 1)
         self.length = self.length_factor * LENGTH
         print('length ' + str(self.length))
+        #audio should be written ahead of where it is being read from, to compensate for input+output latency
         self.readp = (self.writep + LATENCY) % self.length
         self.initialized = True
         self.isplaying = True
         self.incptrs()
     #dump_and_initialize() creates self.audio all at once by copying data into it
+    #optimization possibly needed to fix initial delay between stopping recording and starting playback of loop 1
     def dump_and_initialize(self, data, length_in_buffers):
         print('dump called')
         self.audio = np.copy(data)
@@ -92,6 +95,7 @@ class audioloop:
         self.initialized = True
         self.isplaying = True
     #add_buffer() appends a new buffer unless loop is filled to MAXLENGTH
+    #expected to only be called before initialization
     def add_buffer(self, data):
         if self.length >= (MAXLENGTH - 1):
             self.length = 0
@@ -110,7 +114,7 @@ class audioloop:
         if self.readp == 0:
             return True
         return False
-    #read() reard and returns a buffer of audio from the loop
+    #read() reads and returns a buffer of audio from the loop
     def read(self):
         #if not initialized do nothing
         if not self.initialized:
@@ -178,6 +182,7 @@ def set_recording(loop_number = 0):
 setup_isrecording = False #set to True when track 1 recording button is first pressed
 setup_donerecording = False #set to true when first track 1 recording is done
 
+#showstatus() checks which loops are recording/playing and lights up LEDs accordingly
 def showstatus():
     for i in range(4):
         if loops[i].isrecording:
@@ -196,9 +201,9 @@ def looping_callback(in_data, frame_count, time_info, status):
     global setup_donerecording
     global setup_isrecording
     global LENGTH
-    #if setup is not done recording
-    #i.e. if the first loop hasn't been recorded yet, nothing else happens
+    #if setup is not done recording i.e. if the first loop hasn't been recorded yet
     if not setup_donerecording:
+        #if setup is currently recording, that recording action happens in the following lines
         if setup_isrecording:
             #if the max allowed loop length is exceeded, stop recording and start looping
             if LENGTH >= MAXLENGTH:
@@ -206,7 +211,7 @@ def looping_callback(in_data, frame_count, time_info, status):
                 setup_donerecording = True
                 setup_isrecording = False
                 return(silence, pyaudio.paContinue)
-            #append incoming audio to tmp_clip
+            #otherwise append incoming audio to tmp_clip and continue
             tmp_clip[LENGTH, :] = np.frombuffer(in_data, dtype = np.int16)
             LENGTH = LENGTH + 1
             return(silence, pyaudio.paContinue)
@@ -221,10 +226,10 @@ def looping_callback(in_data, frame_count, time_info, status):
                 loop.isrecording = True
                 loop.iswaiting = False
                 print('Recording...')
-    #if loop1 is recording, overdub
+    #if loop1 is recording, just overdub (because we know it is initialized by this point)
     if loop1.isrecording:
         loop1.dub(in_data)
-    #if any other loop is recording, check initialization and accordingly add or overdub
+    #if any other loop is recording, check initialization and accordingly append or overdub
     for loop in (loop2, loop3, loop4):
         if loop.isrecording:
             if loop.initialized:
@@ -232,6 +237,7 @@ def looping_callback(in_data, frame_count, time_info, status):
             else:
                 loop.add_buffer(in_data)
 
+    #mix audio read from all the loops and play it
     play_buffer[:] = (loop1.read()[:] + loop2.read()[:] + loop3.read()[:] + loop4.read()[:])/4
     return(play_buffer, pyaudio.paContinue)
 
@@ -249,22 +255,31 @@ looping_stream = pa.open(
     stream_callback = looping_callback
 )
 
-#UI record first loop
-
+#audio stream has now been started and the callback function is running in a background thread.
+#first, we give the stream some time to properly start up
 time.sleep(3)
+#then we turn on all lights to indicate that looper is ready to start looping
 print('ready')
 for led in RECLEDS:
     led.on()
 for led in PLAYLEDS:
     led.on()
 
+#once all LEDs are on, we wait for the master loop record button to be pressed
 RECBUTTONS[0].wait_for_press()
+#when the button is pressed, set the flag...
 setup_isrecording = True
+#looping_callback will see this flag and start recording to tmp_clip
+
+#turn off all LEDs except master loop record
 for i in range(1, 4):
     RECLEDS[i].off()
 for led in PLAYLEDS:
     led.off()
-time.sleep(1) #allowing time for button release
+
+#allow time for button release, otherwise the same button press will start and stop the recording
+time.sleep(1)
+#now wait for button to be pressed again, then stop recording and initialize master loop
 RECBUTTONS[0].wait_for_press()
 setup_isrecording = False
 setup_donerecording = True
@@ -276,6 +291,7 @@ showstatus()
 
 #UI do everything else
 
+#the 4 following functions are here because you seemingly can't pass parameters in button-press event definitions
 def set_rec_1():
     set_recording(1)
 def set_rec_2():
@@ -286,18 +302,22 @@ def set_rec_4():
     set_recording(4)
 
 finished = False
+#calling finish() will set finished flag, allowing program to break from loop at end of script and exit
 def finish():
     global finished
     finished = True
 
+#restart_looper() restarts this python script
 def restart_looper():
-    pa.terminate()
-    os.execlp('python3', 'python3', 'main.py')
+    pa.terminate() #needed to free audio device for reuse
+    os.execlp('python3', 'python3', 'main.py') #replaces current process with a new instance of the same script
+
+#now defining functions of all the buttons during jam session...
 
 for i in range(4):
     RECBUTTONS[i].when_held = loops[i].clear
     PLAYBUTTONS[i].when_pressed = loops[i].toggle_mute
-
+    
 RECBUTTONS[0].when_pressed = set_rec_1
 RECBUTTONS[1].when_pressed = set_rec_2
 RECBUTTONS[2].when_pressed = set_rec_3
@@ -306,6 +326,7 @@ RECBUTTONS[3].when_pressed = set_rec_4
 PLAYBUTTONS[3].when_held = finish
 PLAYBUTTONS[0].when_held = restart_looper
 
+#this loop runs during the jam session
 while not finished:
     showstatus()
     time.sleep(0.3)
