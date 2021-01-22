@@ -1,5 +1,5 @@
 # raspi-looper
-Simple 4 track looper for RaspBerry Pi. Uses pyaudio.
+Simple 4 track looper for Raspberry Pi. Uses pyaudio.
 
 Uses a USB soundcard probably.
 Uses 8 buttons (push-to-connect) and 8 LEDs to trigger and indicate playback and recording on 4 tracks.
