@@ -19,7 +19,7 @@ Buttons' Functions:
     Press 'record' button: Start waiting to record/overdub, stop recording/overdubbing.
     Hold 'record' button: Clear track.
     Press 'play' button: Mute/Unmute track.
-    Press 'play' on track 1: Quit and start new looping session.
-    Press 'play' on track 4: Quit but don't restart (useful for making changes to your Raspberry Pi)
+    Hold 'play' on track 1: Quit and start new looping session.
+    Hold 'play' on track 4: Quit but don't restart (useful for making changes to your Raspberry Pi)
 
 Demo in YouTube video.
