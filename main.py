@@ -38,7 +38,7 @@ silence = np.zeros([CHUNK], dtype = np.int16) #a buffer containing silence
 
 CROSSSYNC = 0.5 #something ad-hoc to improve sync between loops
 
-#tmp_clip holds the first loop recorded before dumping to loop1
+#tmp_clip holds the first loop recorded before dumping to master loop
 tmp_clip = np.zeros([MAXLENGTH, CHUNK], dtype = np.int16)
 
 pa = pyaudio.PyAudio()
@@ -85,7 +85,7 @@ class audioloop:
         self.isplaying = True
         self.incptrs()
     #dump_and_initialize() creates self.audio all at once by copying data into it
-    #optimization possibly needed to fix initial delay between stopping recording and starting playback of loop 1
+    #optimization possibly needed to fix initial delay between stopping recording and starting playback of master loop
     def dump_and_initialize(self, data, length_in_buffers):
         print('dump called')
         self.audio = np.copy(data)
@@ -145,13 +145,10 @@ class audioloop:
         self.readp = 0
         self.writep = 0
 
-loop1 = audioloop()
-loop2 = audioloop()
-loop3 = audioloop()
-loop4 = audioloop()
-loops = (loop1, loop2, loop3, loop4)
+#defining four audio loops. loops[0] is the master loop.
+loops = (audioloop(), audioloop(), audioloop(), audioloop())
 
-#set_recording() schedules a loop to start recording when loop1 next restarts
+#set_recording() schedules a loop to start recording when master loop next restarts
 def set_recording(loop_number = 0):
     print('set_recording called')
     global loops
@@ -201,7 +198,7 @@ def looping_callback(in_data, frame_count, time_info, status):
     global setup_donerecording
     global setup_isrecording
     global LENGTH
-    #if setup is not done recording i.e. if the first loop hasn't been recorded yet
+    #if setup is not done recording i.e. if the master loop hasn't been recorded yet
     if not setup_donerecording:
         #if setup is currently recording, that recording action happens in the following lines
         if setup_isrecording:
@@ -215,22 +212,22 @@ def looping_callback(in_data, frame_count, time_info, status):
             tmp_clip[LENGTH, :] = np.frombuffer(in_data, dtype = np.int16)
             LENGTH = LENGTH + 1
             return(silence, pyaudio.paContinue)
-        #if first loop not currently recording and not yet recorded just wait
+        #if master loop not currently recording and not yet recorded then just wait
         else:
             return(silence, pyaudio.paContinue)
-    #execution ony reaches here if first loop finished recording.
-    #when loop1 restarts, start recording on any tracks that are waiting
-    if loop1.is_restarting():
+    #execution ony reaches here if master loop finished recording.
+    #when master loop restarts, start recording on any tracks that are waiting
+    if loops[0].is_restarting():
         for loop in loops:
             if loop.iswaiting:
                 loop.isrecording = True
                 loop.iswaiting = False
                 print('Recording...')
-    #if loop1 is recording, just overdub (because we know it is initialized by this point)
-    if loop1.isrecording:
-        loop1.dub(in_data)
+    #if master loop is recording, just overdub (because we know it is initialized by this point)
+    if loops[0].isrecording:
+        loops[0].dub(in_data)
     #if any other loop is recording, check initialization and accordingly append or overdub
-    for loop in (loop2, loop3, loop4):
+    for loop in (loops[1], loops[2], loops[3]):
         if loop.isrecording:
             if loop.initialized:
                 loop.dub(in_data)
@@ -238,7 +235,7 @@ def looping_callback(in_data, frame_count, time_info, status):
                 loop.add_buffer(in_data)
 
     #mix audio read from all the loops and play it
-    play_buffer[:] = (loop1.read()[:] + loop2.read()[:] + loop3.read()[:] + loop4.read()[:])/4
+    play_buffer[:] = (loops[0].read()[:] + loops[1].read()[:] + loops[2].read()[:] + loops[3].read()[:])/4
     return(play_buffer, pyaudio.paContinue)
 
 #now initializing looping_stream (the only audio stream)
@@ -277,14 +274,14 @@ for i in range(1, 4):
 for led in PLAYLEDS:
     led.off()
 
-#allow time for button release, otherwise the same button press will start and stop the recording
+#allow time for button release, otherwise pressing the button once will start and stop the recording
 time.sleep(1)
 #now wait for button to be pressed again, then stop recording and initialize master loop
 RECBUTTONS[0].wait_for_press()
 setup_isrecording = False
 setup_donerecording = True
 print(LENGTH)
-loop1.dump_and_initialize(tmp_clip, LENGTH)
+loops[0].dump_and_initialize(tmp_clip, LENGTH)
 print('length is ' + str(LENGTH))
 
 showstatus()
@@ -326,7 +323,7 @@ RECBUTTONS[3].when_pressed = set_rec_4
 PLAYBUTTONS[3].when_held = finish
 PLAYBUTTONS[0].when_held = restart_looper
 
-#this loop runs during the jam session
+#this while loop runs during the jam session
 while not finished:
     showstatus()
     time.sleep(0.3)
