@@ -36,10 +36,18 @@ LENGTH = 0 #length of the first loop, value set during first record
 
 silence = np.zeros([CHUNK], dtype = np.int16) #a buffer containing silence
 
-CROSSSYNC = 0.5 #something ad-hoc to improve sync between loops
-
 #tmp_clip holds the first loop recorded before dumping to master loop
 tmp_clip = np.zeros([MAXLENGTH, CHUNK], dtype = np.int16)
+
+#multiplying by upramp and downramp gives fade-in and fade-out
+downramp = np.linspace(1, 0, CHUNK)
+upramp = np.linspace(0, 1, CHUNK)
+#fadein() applies fade-in to a buffer
+def fadein(buffer):
+    np.multiply(buffer, upramp, out = buffer, casting = 'unsafe')
+#fadeout() applies fade-out to a buffer
+def fadeout(buffer):
+    np.multiply(buffer, downramp, out = buffer, casting = 'unsafe')
 
 pa = pyaudio.PyAudio()
 
@@ -55,6 +63,8 @@ class audioloop:
         self.isrecording = False
         self.isplaying = False
         self.iswaiting = False
+        self.last_buffer_recorded = 0 #index of last buffer added
+        self.preceding_buffer = np.zeros([CHUNK], dtype = np.int16)
         #dub ratio must be reduced with each overdub to keep all overdubs at the same level while preventing clipping.
         #first overdub is attenuated by a factor of 0.9, second by 0.81, etc.
         #each time the existing audio is attenuated by a factor of 0.9
@@ -76,9 +86,18 @@ class audioloop:
             print('redundant initialization')
             return
         self.writep = self.length - 1
+        self.last_buffer_recorded = self.writep
         self.length_factor = (int((self.length - OVERSHOOT) / LENGTH) + 1)
         self.length = self.length_factor * LENGTH
         print('length ' + str(self.length))
+        print('last buffer recorded ' + str(self.last_buffer_recorded))
+
+        #crossfade
+        fadeout(self.audio[self.last_buffer_recorded]) #fade out the last recorded buffer
+        preceding_buffer_copy = np.copy(self.preceding_buffer)
+        fadein(preceding_buffer_copy)
+        self.audio[self.length - 1, :] += preceding_buffer_copy[:]
+
         #audio should be written ahead of where it is being read from, to compensate for input+output latency
         self.readp = (self.writep + LATENCY) % self.length
         self.initialized = True
@@ -86,12 +105,23 @@ class audioloop:
         self.incptrs()
     #dump_and_initialize() creates self.audio all at once by copying data into it
     #optimization possibly needed to fix initial delay between stopping recording and starting playback of master loop
-    def dump_and_initialize(self, data, length_in_buffers):
+    def dump_and_initialize(self, data, length_in_buffers, preceding_buffer):
         print('dump called')
         self.audio = np.copy(data)
         self.length = length_in_buffers
         self.writep = self.length - 1
+        self.last_buffer_recorded = self.writep
         self.readp = (self.writep + LATENCY) % self.length
+        self.preceding_buffer = np.copy(preceding_buffer)
+        print('length ' + str(self.length))
+        print('last buffer recorded ' + str(self.last_buffer_recorded))
+        
+        #crossfade
+        preceding_buffer_copy = np.copy(preceding_buffer)
+        fadeout(self.audio[self.last_buffer_recorded]) #fade out the last buffer
+        fadein(preceding_buffer_copy) #fade in previous buffer
+        self.audio[self.last_buffer_recorded, :] += preceding_buffer_copy[:] #add together
+        
         self.initialized = True
         self.isplaying = True
     #add_buffer() appends a new buffer unless loop is filled to MAXLENGTH
@@ -101,7 +131,7 @@ class audioloop:
             self.length = 0
             print('loop full')
             return
-        self.audio[self.length, :] = np.frombuffer(data, dtype = np.int16)
+        self.audio[self.length, :] = np.copy(data)
         self.length = self.length + 1
     def toggle_mute(self):
         if self.isplaying:
@@ -128,10 +158,10 @@ class audioloop:
         self.incptrs()
         return(self.audio[tmp, :])
     #dub() mixes an incoming buffer of audio with the one at writep
-    def dub(self, data):
+    def dub(self, data, fade_in = False, fade_out = False):
         if not self.initialized:
             return
-        datadump = np.frombuffer(data, dtype = np.int16)
+        datadump = np.copy(data)
         self.audio[self.writep, :] = self.audio[self.writep, :] * 0.9 + datadump[:] * self.dub_ratio
     #clear() clears the loop so that a new loop of the same or a different length can be recorded on the track
     def clear(self):
@@ -144,9 +174,19 @@ class audioloop:
         self.length = 0
         self.readp = 0
         self.writep = 0
+        self.last_buffer_recorded = 0
+        self.preceding_buffer = np.zeros([CHUNK], dtype = np.int16)
+
+    def start_recording(self, previous_buffer):
+        self.isrecording = True
+        self.iswaiting = False
+        self.preceding_buffer = np.copy(previous_buffer)
 
 #defining four audio loops. loops[0] is the master loop.
 loops = (audioloop(), audioloop(), audioloop(), audioloop())
+
+#while looping, prev_rec_buffer keeps track of the audio buffer recorded before the current one
+prev_rec_buffer = np.zeros([CHUNK], dtype = np.int16)
 
 #set_recording() schedules a loop to start recording when master loop next restarts
 def set_recording(loop_number = 0):
@@ -195,9 +235,13 @@ play_buffer = np.zeros([CHUNK], dtype = np.int16) #buffer to hold mixed audio fr
 
 def looping_callback(in_data, frame_count, time_info, status):
     global play_buffer
+    global prev_rec_buffer
     global setup_donerecording
     global setup_isrecording
     global LENGTH
+    
+    current_rec_buffer = np.frombuffer(in_data, dtype = np.int16)
+
     #if setup is not done recording i.e. if the master loop hasn't been recorded yet
     if not setup_donerecording:
         #if setup is currently recording, that recording action happens in the following lines
@@ -209,7 +253,7 @@ def looping_callback(in_data, frame_count, time_info, status):
                 setup_isrecording = False
                 return(silence, pyaudio.paContinue)
             #otherwise append incoming audio to tmp_clip and continue
-            tmp_clip[LENGTH, :] = np.frombuffer(in_data, dtype = np.int16)
+            tmp_clip[LENGTH, :] = np.copy(current_rec_buffer)
             LENGTH = LENGTH + 1
             return(silence, pyaudio.paContinue)
         #if master loop not currently recording and not yet recorded then just wait
@@ -217,23 +261,25 @@ def looping_callback(in_data, frame_count, time_info, status):
             return(silence, pyaudio.paContinue)
     #execution ony reaches here if master loop finished recording.
     #when master loop restarts, start recording on any tracks that are waiting
-    if loops[0].is_restarting():
+    if loops[0].is_restarting() or not loops[0].initialized:
         for loop in loops:
             if loop.iswaiting:
-                loop.isrecording = True
-                loop.iswaiting = False
+                loop.start_recording(prev_rec_buffer)
                 print('Recording...')
     #if master loop is recording, just overdub (because we know it is initialized by this point)
     if loops[0].isrecording:
-        loops[0].dub(in_data)
-    #if any other loop is recording, check initialization and accordingly append or overdub
+        loops[0].dub(current_rec_buffer)
+    #if a loop is recording, check initialization and accordingly append or overdub
     for loop in (loops[1], loops[2], loops[3]):
         if loop.isrecording:
             if loop.initialized:
-                loop.dub(in_data)
+                loop.dub(current_rec_buffer)
             else:
-                loop.add_buffer(in_data)
-
+                loop.add_buffer(current_rec_buffer)
+    
+    #current buffer will serve as previous in next iteration
+    prev_rec_buffer = np.copy(current_rec_buffer)
+    
     #mix audio read from all the loops and play it
     play_buffer[:] = (loops[0].read()[:] + loops[1].read()[:] + loops[2].read()[:] + loops[3].read()[:])/4
     return(play_buffer, pyaudio.paContinue)
@@ -264,8 +310,9 @@ for led in PLAYLEDS:
 
 #once all LEDs are on, we wait for the master loop record button to be pressed
 RECBUTTONS[0].wait_for_press()
-#when the button is pressed, set the flag...
+#when the button is pressed, set the flag and the buffer recorded immediately before button press...
 setup_isrecording = True
+buffer_before_loop1 = np.copy(prev_rec_buffer)
 #looping_callback will see this flag and start recording to tmp_clip
 
 #turn off all LEDs except master loop record
@@ -281,7 +328,7 @@ RECBUTTONS[0].wait_for_press()
 setup_isrecording = False
 setup_donerecording = True
 print(LENGTH)
-loops[0].dump_and_initialize(tmp_clip, LENGTH)
+loops[0].dump_and_initialize(tmp_clip, LENGTH, buffer_before_loop1)
 print('length is ' + str(LENGTH))
 
 showstatus()
