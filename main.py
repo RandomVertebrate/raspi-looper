@@ -32,9 +32,14 @@ print('looking for devices ' + str(INDEVICE) + ' and ' + str(OUTDEVICE))
 overshoot_in_milliseconds = int(parameters[5]) #allowance in milliseconds for pressing 'stop recording' late
 OVERSHOOT = round((overshoot_in_milliseconds/1000) * (RATE/CHUNK)) #allowance in buffers
 MAXLENGTH = int(12582912 / CHUNK) #96mb of audio in total
+SAMPLEMAX = 0.9 * (2**15) #maximum possible value for an audio sample (little bit of margin)
 LENGTH = 0 #length of the first recording on track 1, all subsequent recordings quantized to a multiple of this.
 
 silence = np.zeros([CHUNK], dtype = np.int16) #a buffer containing silence
+
+#mixed output (sum of audio from tracks) is multiplied by output_volume before being played.
+#This is updated dynamically as max peak in resultant audio changes
+output_volume = np.float16(1.0)
 
 #multiplying by upramp and downramp gives fade-in and fade-out
 downramp = np.linspace(1, 0, CHUNK)
@@ -162,36 +167,23 @@ loops = (audioloop(), audioloop(), audioloop(), audioloop())
 #while looping, prev_rec_buffer keeps track of the audio buffer recorded before the current one
 prev_rec_buffer = np.zeros([CHUNK], dtype = np.int16)
 
-#set_recording() schedules a loop to start recording when master loop next restarts
-def set_recording(loop_number = 0):
-    print('set_recording called')
-    global loops
-    already_recording = False
-    #if invalid input just stop recording on all tracks, initialize track if needed and return
-    if not loop_number in (1, 2, 3, 4):
-        print('invalid')
-        for loop in loops:
-            if loop.isrecording and not loop.initialized:
-                loop.initialize()
-            loop.isrecording = False
-            loop.iswaiting = False
-        return
-    #if chosen track is currently recording flag it
-    if loops[loop_number-1].isrecording:
-        already_recording = True
-    #turn off recording on all tracks
-    for loop in loops:
-        if loop.isrecording and not loop.initialized:
-            loop.initialize()
-        loop.isrecording = False
-        loop.iswaiting = False
-    #unless flagged, schedule recording. If chosen track was recording, then stop recording
-    #like a toggle but with delayed enabling and instant disabling
-    if not already_recording:
-        loops[loop_number-1].iswaiting = True
-
-setup_isrecording = False #set to True when track 1 recording button is first pressed
-setup_donerecording = False #set to true when first track 1 recording is done
+#update output volume to prevent mixing distortion due to sample overflow
+def updatevolume():
+    global output_volume
+    peak = np.max(
+                  np.abs(
+                          loops[0].audio.astype(np.int32)[:][:]
+                        + loops[1].audio.astype(np.int32)[:][:]
+                        + loops[2].audio.astype(np.int32)[:][:]
+                        + loops[3].audio.astype(np.int32)[:][:]
+                        )
+                 )
+    print('peak = ' + str(peak))
+    if peak > SAMPLEMAX:
+        output_volume = SAMPLEMAX / peak
+    else:
+        output_volume = 1
+    print('output volume = ' + str(output_volume))
 
 #showstatus() checks which loops are recording/playing and lights up LEDs accordingly
 def showstatus():
@@ -205,6 +197,35 @@ def showstatus():
         else:
             PLAYLEDS[i].off()
 
+#set_recording() schedules a loop to start recording, for when master loop next restarts
+def set_recording(loop_number = 0):
+    print('set_recording called')
+    global loops
+    already_recording = False
+    #if invalid input, do nothing
+    if not loop_number in (1, 2, 3, 4):
+        print('invalid loop number passed to set_recording')
+        return;
+    #if chosen track is currently recording flag it
+    if loops[loop_number-1].isrecording:
+        already_recording = True
+    #turn off recording on all tracks
+    for loop in loops:
+        if loop.isrecording and not loop.initialized:
+            loop.initialize()
+        loop.isrecording = False
+        loop.iswaiting = False
+    #unless flagged, schedule recording. If chosen track was recording, then stop recording
+    #like a toggle but with delayed enabling and instant disabling
+    if already_recording: #then set_recording() was called to finish the recording, i.e. new audio just got added.
+        showstatus() #so that delay due to volume updation doesn't affect LED indicator update speed
+        updatevolume()
+    else: #set_recording was called to actually prep the track to start recording
+        loops[loop_number-1].iswaiting = True
+
+setup_isrecording = False #set to True when track 1 recording button is first pressed
+setup_donerecording = False #set to true when first track 1 recording is done
+
 play_buffer = np.zeros([CHUNK], dtype = np.int16) #buffer to hold mixed audio from all 4 tracks
 
 def looping_callback(in_data, frame_count, time_info, status):
@@ -214,8 +235,6 @@ def looping_callback(in_data, frame_count, time_info, status):
     global setup_isrecording
     global LENGTH
     current_rec_buffer = np.copy(np.frombuffer(in_data, dtype = np.int16))
-    #now scaling down incoming audio to prevent distortion due to mixing and overdubs
-    np.multiply(current_rec_buffer, 0.25, out = current_rec_buffer, casting = 'unsafe')
     #SETUP: FIRST RECORDING
     #if setup is not done i.e. if the master loop hasn't been recorded to yet
     if not setup_donerecording:
@@ -251,8 +270,13 @@ def looping_callback(in_data, frame_count, time_info, status):
                 loop.dub(current_rec_buffer)
             else:
                 loop.add_buffer(current_rec_buffer)
-    #mix audio read from all the loops and play it
-    play_buffer[:] = loops[0].read()[:] + loops[1].read()[:] + loops[2].read()[:] + loops[3].read()[:]
+    #add to play_buffer only one-fourth of each audio signal times the output_volume
+    play_buffer[:] = np.multiply((
+                                   loops[0].read().astype(np.int32)[:]
+                                 + loops[1].read().astype(np.int32)[:]
+                                 + loops[2].read().astype(np.int32)[:]
+                                 + loops[3].read().astype(np.int32)[:]
+                                 ), output_volume, out= None, casting = 'unsafe').astype(np.int16)
     #current buffer will serve as previous in next iteration
     prev_rec_buffer = np.copy(current_rec_buffer)
     #play mixed audio and move on to next iteration
@@ -345,7 +369,7 @@ RECBUTTONS[3].when_pressed = set_rec_4
 PLAYBUTTONS[3].when_held = finish
 PLAYBUTTONS[0].when_held = restart_looper
 
-#this while loop runs during the jam session
+#this while loop runs during the jam session.
 while not finished:
     showstatus()
     time.sleep(0.3)
