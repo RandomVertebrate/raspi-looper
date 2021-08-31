@@ -23,3 +23,38 @@ Buttons' Functions:
     Hold 'play' on track 4: Quit but don't restart (useful for making changes to your Raspberry Pi)
 
 Demo in YouTube video.
+
+## Installation Instructions
+(assumes a fresh install of Raspberry Pi OS)
+
+1. Clone this repository:
+    ```git clone https://github.com/RandomVertebrate/raspi-looper```
+
+2. Install Python3-PyAudio:
+    ```sudo apt install python3-pyaudio```
+
+3. Check your volume settings in AlsaMixer (F6 changes device):
+    ```alsamixer``` (press escape to exit)
+
+4. Change to the raspi-looper directory:
+    ```cd raspi-looper```
+
+5. Make a note of your audio device numbers:
+    ```python3 devices.py```
+
+6. Configure Raspi-Looper settings:
+    ```python3 settings.py```
+    (Set latency to 100ms for now and use the device numbers from above)
+
+7. Find your latency:
+    ```python3 latency.py```
+
+8. Comment out the load-module module-suspend-on-idle in default.pa (ctrl-x then y to save and exit):
+    ```sudo nano /etc/pulse/default.pa```
+
+9. Configure auto-boot into Raspi-Looper (ctrl-x then y to save and exit):
+    ```sudo nano /home/pi/.bashrc```
+    Add the following lines at the end of the file:
+    >cd /home/pi/raspi-looper
+    
+    >sudo python3 main.py
