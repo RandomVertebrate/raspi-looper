@@ -22,7 +22,7 @@ Buttons' Functions:
     Hold 'play' on track 1: Quit and start new looping session.
     Hold 'play' on track 4: Quit but don't restart (useful for making changes to your Raspberry Pi)
 
-Demo in YouTube video.
+Demo in YouTube video: [Demo Video](https://youtu.be/0FDovuCira8)
 
 ## Installation Instructions
 (assumes a fresh install of Raspberry Pi OS)
