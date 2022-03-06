@@ -35,6 +35,8 @@ MAXLENGTH = int(12582912 / CHUNK) #96mb of audio in total
 SAMPLEMAX = 0.9 * (2**15) #maximum possible value for an audio sample (little bit of margin)
 LENGTH = 0 #length of the first recording on track 1, all subsequent recordings quantized to a multiple of this.
 
+debounce_length = 0.1 #length in seconds of button debounce period
+
 silence = np.zeros([CHUNK], dtype = np.int16) #a buffer containing silence
 
 #mixed output (sum of audio from tracks) is multiplied by output_volume before being played.
@@ -72,6 +74,8 @@ class audioloop:
         #each time the existing audio is attenuated by a factor of 0.9
         #in this way infinite overdubs of amplitude x result in total amplitude 9x.
         self.dub_ratio = 1.0
+        self.rec_just_pressed = False
+        self.play_just_pressed = False
     #incptrs() increments pointers and, when restarting while recording, advances dub ratio
     def incptrs(self):
         if self.readp == self.length - 1:
@@ -104,6 +108,9 @@ class audioloop:
         self.initialized = True
         self.isplaying = True
         self.incptrs()
+        #debounce flags
+        self.rec_just_pressed = False
+        self.play_just_pressed = False
     #add_buffer() appends a new buffer unless loop is filled to MAXLENGTH
     #expected to only be called before initialization
     def add_buffer(self, data):
@@ -114,10 +121,18 @@ class audioloop:
         self.audio[self.length, :] = np.copy(data)
         self.length = self.length + 1
     def toggle_mute(self):
+        #if just pressed do nothing
+        if self.play_just_pressed:
+            return
+        #toggle mute
         if self.isplaying:
             self.isplaying = False
         else:
             self.isplaying = True
+        #keep self.play_just_pressed True for debounce_length sec
+        self.play_just_pressed = True
+        time.sleep(debounce_length)
+        self.play_just_pressed = False
     def is_restarting(self):
         if not self.initialized:
             return False
@@ -156,10 +171,20 @@ class audioloop:
         self.writep = 0
         self.last_buffer_recorded = 0
         self.preceding_buffer = np.zeros([CHUNK], dtype = np.int16)
+        self.rec_just_pressed = False
+        self.play_just_pressed = False
     def start_recording(self, previous_buffer):
         self.isrecording = True
         self.iswaiting = False
         self.preceding_buffer = np.copy(previous_buffer)
+    def bouncewait_rec(self):
+        self.rec_just_pressed = True
+        time.sleep(debounce_length)
+        self.rec_just_pressed = False
+    def bouncewait_play(self):
+        self.play_just_pressed = True
+        time.sleep(debounce_length)
+        self.play_just_pressed = False
 
 #defining four audio loops. loops[0] is the master loop.
 loops = (audioloop(), audioloop(), audioloop(), audioloop())
@@ -199,8 +224,11 @@ def showstatus():
 
 #set_recording() schedules a loop to start recording, for when master loop next restarts
 def set_recording(loop_number = 0):
-    print('set_recording called')
     global loops
+    #if just pressed do nothing
+    if loops[loop_number-1].rec_just_pressed:
+        return
+    print('set_recording called')
     already_recording = False
     #if invalid input, do nothing
     if not loop_number in (1, 2, 3, 4):
@@ -222,6 +250,10 @@ def set_recording(loop_number = 0):
         updatevolume()
     else: #set_recording was called to actually prep the track to start recording
         loops[loop_number-1].iswaiting = True
+    #keep relevant loop's rec_just_playing True for debounce_length seconds
+    loops[loop_number-1].rec_just_pressed = True
+    time.sleep(debounce_length)
+    loops[loop_number-1].rec_just_pressed = False
 
 setup_isrecording = False #set to True when track 1 recording button is first pressed
 setup_donerecording = False #set to true when first track 1 recording is done
@@ -360,6 +392,8 @@ def restart_looper():
 for i in range(4):
     RECBUTTONS[i].when_held = loops[i].clear
     PLAYBUTTONS[i].when_pressed = loops[i].toggle_mute
+    RECBUTTONS[i].when_released = loops[i].bouncewait_rec
+    PLAYBUTTONS[i].when_released = loops[i].bouncewait_play
     
 RECBUTTONS[0].when_pressed = set_rec_1
 RECBUTTONS[1].when_pressed = set_rec_2
