@@ -49,8 +49,8 @@ Demo in YouTube video: [Demo Video](https://youtu.be/0FDovuCira8)
 7. Find your latency:
     ```python3 latency.py```
 
-8. Comment out the load-module module-suspend-on-idle in default.pa (ctrl-x then y to save and exit):
-    ```sudo nano /etc/pulse/default.pa```
+8. Uninstall pulseaudio:
+    ```sudo apt remove pulseaudio```
 
 9. Configure auto-boot into Raspi-Looper (ctrl-x then y to save and exit):
     ```sudo nano /home/pi/.bashrc```
