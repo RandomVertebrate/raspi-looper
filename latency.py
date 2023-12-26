@@ -20,11 +20,11 @@ pa = pyaudio.PyAudio()
 
 silence = np.zeros(CHUNK, dtype = np.int16)
 
-cos_arr = np.empty(CHUNK, dtype = np.float)                         #to store values of cos(i omega) at all relevant i
+cos_arr = np.empty(CHUNK, dtype = float)                         #to store values of cos(i omega) at all relevant i
 for i in range(CHUNK):
     cos_arr[i] = np.cos(click_ang_fr * i)
 
-sin_arr = np.empty(CHUNK, dtype = np.float)                         #to store values of sin
+sin_arr = np.empty(CHUNK, dtype = float)                         #to store values of sin
 for i in range(CHUNK):
     sin_arr[i] = np.sin(click_ang_fr * i)
 
