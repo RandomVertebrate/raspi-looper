@@ -7,11 +7,19 @@ import time
 import os
 from gpiozero import LED, Button
 
+debounce_length = 0.1 #length in seconds of button debounce period
+
 #defining buttons and LEDs
 PLAYLEDS = (LED(2), LED(3), LED(4), LED(17))
 RECLEDS = (LED(27), LED(22), LED(10), LED(9))
-PLAYBUTTONS = (Button(11), Button(5), Button(6), Button(13))
-RECBUTTONS = (Button(19), Button(26), Button(21), Button(20))
+PLAYBUTTONS = (Button(11, bounce_time = debounce_length),
+               Button(5, bounce_time = debounce_length),
+               Button(6, bounce_time = debounce_length),
+               Button(13, bounce_time = debounce_length))
+RECBUTTONS = (Button(19, bounce_time = debounce_length),
+              Button(26, bounce_time = debounce_length),
+              Button(21, bounce_time = debounce_length),
+              Button(20, bounce_time = debounce_length))
 
 #get configuration (audio settings etc.) from file
 settings_file = open('Config/settings.prt', 'r')
@@ -34,8 +42,6 @@ OVERSHOOT = round((overshoot_in_milliseconds/1000) * (RATE/CHUNK)) #allowance in
 MAXLENGTH = int(12582912 / CHUNK) #96mb of audio in total
 SAMPLEMAX = 0.9 * (2**15) #maximum possible value for an audio sample (little bit of margin)
 LENGTH = 0 #length of the first recording on track 1, all subsequent recordings quantized to a multiple of this.
-
-debounce_length = 0.1 #length in seconds of button debounce period
 
 silence = np.zeros([CHUNK], dtype = np.int16) #a buffer containing silence
 
@@ -108,9 +114,6 @@ class audioloop:
         self.initialized = True
         self.isplaying = True
         self.incptrs()
-        #debounce flags
-        self.rec_just_pressed = False
-        self.play_just_pressed = False
     #add_buffer() appends a new buffer unless loop is filled to MAXLENGTH
     #expected to only be called before initialization
     def add_buffer(self, data):
@@ -121,18 +124,11 @@ class audioloop:
         self.audio[self.length, :] = np.copy(data)
         self.length = self.length + 1
     def toggle_mute(self):
-        #if just pressed do nothing
-        if self.play_just_pressed:
-            return
         #toggle mute
         if self.isplaying:
             self.isplaying = False
         else:
             self.isplaying = True
-        #keep self.play_just_pressed True for debounce_length sec
-        self.play_just_pressed = True
-        time.sleep(debounce_length)
-        self.play_just_pressed = False
     def is_restarting(self):
         if not self.initialized:
             return False
@@ -177,14 +173,6 @@ class audioloop:
         self.isrecording = True
         self.iswaiting = False
         self.preceding_buffer = np.copy(previous_buffer)
-    def bouncewait_rec(self):
-        self.rec_just_pressed = True
-        time.sleep(debounce_length)
-        self.rec_just_pressed = False
-    def bouncewait_play(self):
-        self.play_just_pressed = True
-        time.sleep(debounce_length)
-        self.play_just_pressed = False
 
 #defining four audio loops. loops[0] is the master loop.
 loops = (audioloop(), audioloop(), audioloop(), audioloop())
@@ -250,10 +238,6 @@ def set_recording(loop_number = 0):
         updatevolume()
     else: #set_recording was called to actually prep the track to start recording
         loops[loop_number-1].iswaiting = True
-    #keep relevant loop's rec_just_playing True for debounce_length seconds
-    loops[loop_number-1].rec_just_pressed = True
-    time.sleep(debounce_length)
-    loops[loop_number-1].rec_just_pressed = False
 
 setup_isrecording = False #set to True when track 1 recording button is first pressed
 setup_donerecording = False #set to true when first track 1 recording is done
@@ -392,8 +376,6 @@ def restart_looper():
 for i in range(4):
     RECBUTTONS[i].when_held = loops[i].clear
     PLAYBUTTONS[i].when_pressed = loops[i].toggle_mute
-    RECBUTTONS[i].when_released = loops[i].bouncewait_rec
-    PLAYBUTTONS[i].when_released = loops[i].bouncewait_play
     
 RECBUTTONS[0].when_pressed = set_rec_1
 RECBUTTONS[1].when_pressed = set_rec_2
