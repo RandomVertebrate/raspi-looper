@@ -7,7 +7,7 @@ import time
 import os
 from gpiozero import LED, Button
 
-debounce_length = 0.1 #length in seconds of button debounce period
+debounce_length = 0.03 #length in seconds of button debounce period
 
 #defining buttons and LEDs
 PLAYLEDS = (LED(2), LED(3), LED(4), LED(17))
@@ -388,7 +388,7 @@ PLAYBUTTONS[0].when_held = restart_looper
 #this while loop runs during the jam session.
 while not finished:
     showstatus()
-    time.sleep(0.3)
+    time.sleep(0.1)
 
 pa.terminate()
 print('Done...')
