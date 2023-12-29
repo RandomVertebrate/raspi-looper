@@ -298,7 +298,6 @@ def looping_callback(in_data, frame_count, time_info, status):
     #execution ony reaches here if setup (first loop record and set LENGTH) finished.
     #when master loop restarts, start recording on any other tracks that are waiting
     if loops[0].is_restarting():
-        update_volume()
         for loop in loops:
             if loop.is_waiting:
                 loop.start_recording(prev_rec_buffer)
@@ -393,6 +392,7 @@ def restart_looper():
 for i in range(4):
     RECBUTTONS[i].when_held = loops[i].clear
     RECBUTTONS[i].when_pressed = loops[i].set_recording
+    RECBUTTONS[i].when_released = update_volume
     PLAYBUTTONS[i].when_pressed = loops[i].toggle_mute
 
 PLAYBUTTONS[3].when_held = finish
