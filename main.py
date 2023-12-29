@@ -250,7 +250,7 @@ def looping_callback(in_data, frame_count, time_info, status):
     global setup_donerecording
     global setup_isrecording
     global LENGTH
-    current_rec_buffer = np.copy(np.frombuffer(in_data, dtype = np.int16))
+    current_rec_buffer = np.right_shift(np.frombuffer(in_data, dtype = np.int16), 2) #some input attenuation for overdub headroom purposes
     #SETUP: FIRST RECORDING
     #if setup is not done i.e. if the master loop hasn't been recorded to yet
     if not setup_donerecording:
