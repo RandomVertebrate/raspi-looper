@@ -203,6 +203,28 @@ class audioloop:
         self.is_waiting = False
         self.preceding_buffer = np.copy(previous_buffer)
 
+    def set_recording(self):
+        '''
+        set_recording() schedules a loop to start recording, for when master loop next restarts
+        '''
+        print('set_recording called')
+        already_recording = False
+
+        #if chosen track is currently recording, flag it
+        if self.is_recording:
+            already_recording = True
+
+        #turn off recording
+        if self.is_recording and not self.initialized:
+            self.initialize()
+        self.is_recording = False
+        self.is_waiting = False
+
+        #unless flagged, schedule recording. If chosen track was recording, then stop recording
+        #like a toggle but with delayed enabling and instant disabling
+        if not already_recording:
+            self.is_waiting = True
+
 #defining four audio loops. loops[0] is the master loop.
 loops = (audioloop(), audioloop(), audioloop(), audioloop())
 
@@ -243,34 +265,6 @@ def show_status():
         else:
             PLAYLEDS[i].off()
 
-def set_recording(loop_number = 0):
-    '''
-    set_recording() schedules a loop to start recording, for when master loop next restarts
-    '''
-    global loops
-    print('set_recording called')
-    already_recording = False
-    #if invalid input, do nothing
-    if not loop_number in (1, 2, 3, 4):
-        print('invalid loop number passed to set_recording')
-        return
-    #if chosen track is currently recording flag it
-    if loops[loop_number-1].is_recording:
-        already_recording = True
-    #turn off recording on all tracks
-    for loop in loops:
-        if loop.is_recording and not loop.initialized:
-            loop.initialize()
-        loop.is_recording = False
-        loop.is_waiting = False
-    #unless flagged, schedule recording. If chosen track was recording, then stop recording
-    #like a toggle but with delayed enabling and instant disabling
-    if already_recording: #then set_recording() was called to finish the recording, i.e. new audio just got added.
-        show_status() #so that delay due to volume updation doesn't affect LED indicator update speed
-        update_volume()
-    else: #set_recording was called to actually prep the track to start recording
-        loops[loop_number-1].is_waiting = True
-
 setup_is_recording = False #set to True when track 1 recording button is first pressed
 setup_donerecording = False #set to true when first track 1 recording is done
 
@@ -304,6 +298,7 @@ def looping_callback(in_data, frame_count, time_info, status):
     #execution ony reaches here if setup (first loop record and set LENGTH) finished.
     #when master loop restarts, start recording on any other tracks that are waiting
     if loops[0].is_restarting():
+        update_volume()
         for loop in loops:
             if loop.is_waiting:
                 loop.start_recording(prev_rec_buffer)
@@ -376,21 +371,11 @@ print(LENGTH)
 loops[0].initialize()
 print('length is ' + str(LENGTH))
 #stop recording on track 1, light LEDs appropriately, then allow time for button release
-set_recording(1)
+loops[1].set_recording()
 show_status()
 time.sleep(0.5)
 
 #UI do everything else
-
-#the 4 following functions are here because you seemingly can't pass parameters in button-press event definitions
-def set_rec_1():
-    set_recording(1)
-def set_rec_2():
-    set_recording(2)
-def set_rec_3():
-    set_recording(3)
-def set_rec_4():
-    set_recording(4)
 
 finished = False
 #calling finish() will set finished flag, allowing program to break from loop at end of script and exit
@@ -407,12 +392,8 @@ def restart_looper():
 
 for i in range(4):
     RECBUTTONS[i].when_held = loops[i].clear
+    RECBUTTONS[i].when_pressed = loops[i].set_recording
     PLAYBUTTONS[i].when_pressed = loops[i].toggle_mute
-    
-RECBUTTONS[0].when_pressed = set_rec_1
-RECBUTTONS[1].when_pressed = set_rec_2
-RECBUTTONS[2].when_pressed = set_rec_3
-RECBUTTONS[3].when_pressed = set_rec_4
 
 PLAYBUTTONS[3].when_held = finish
 PLAYBUTTONS[0].when_held = restart_looper
