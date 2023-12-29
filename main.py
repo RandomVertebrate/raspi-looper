@@ -40,7 +40,7 @@ SAMPLEMAX = 0.9 * (2**15) #maximum possible value for an audio sample (little bi
 LENGTH = 0 #length of the first recording on track 1, all subsequent recordings quantized to a multiple of this.
 
 print(str(RATE) + ' ' +  str(CHUNK))
-print('latency correction (buffers): ' + str(LATENCY))
+print('NEW VERSION/nlatency correction (buffers): ' + str(LATENCY))
 print('looking for devices ' + str(INDEVICE) + ' and ' + str(OUTDEVICE))
 
 silence = np.zeros([CHUNK], dtype = np.int16) #a buffer containing silence
@@ -298,6 +298,7 @@ def looping_callback(in_data, frame_count, time_info, status):
     #execution ony reaches here if setup (first loop record and set LENGTH) finished.
     #when master loop restarts, start recording on any other tracks that are waiting
     if loops[0].is_restarting():
+        #update_volume()
         for loop in loops:
             if loop.is_waiting:
                 loop.start_recording(prev_rec_buffer)
