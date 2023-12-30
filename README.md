@@ -1,60 +1,46 @@
 # raspi-looper
 Simple 4 track looper for Raspberry Pi. Uses pyaudio.
 
-Uses a USB soundcard probably.
-Uses 8 buttons (push-to-connect) and 8 LEDs to trigger and indicate playback and recording on 4 tracks.
-One leg of each button goes to ground, as does the negative side of each LED.
-The free legs of the buttons are connected as in gpio_connections.txt
-The positive side of the LEDs are connected through 100Ohm current-limiting resistors to gpio pins as in gpio_connections.txt
+## Hardware Setup
+### Components
+- Raspberry Pi
+- USB sound card
+- 8 Buttons
+- 8 LEDs
+- Audio jacks, wires and connectors to taste
 
-Instructions (Setup):
-Run devices.py first to check device index of your soundcard. Probably 1.
-Run settings.py which edits Config/settings.prt
-You can run latency.py to measure your round trip latency and update the value.
-Run main.py to loop. You can add it to your .bashrc to run on boot.
-May be a good idea to tweak ALSA and Pulse audio configuration files as needed.
+### Connections
+- Buttons and LEDs connect to GPIO.
+- Sound card plugs into full-size USB port on Raspberry Pi.
+- Looper input goes to sound card input AND to looper input 1 ("LIVE").
+- Soundcard output goes to looper output 2 ("LOOPS").
 
-Buttons' Functions:
+See GPIO connections table and wiring diagram.
 
-    Press 'record' button: Start waiting to record/overdub, stop recording/overdubbing.
-    Hold 'record' button: Clear track.
-    Press 'play' button: Mute/Unmute track.
-    Hold 'play' on track 1: Quit and start new looping session.
-    Hold 'play' on track 4: Quit but don't restart (useful for making changes to your Raspberry Pi)
+## Software Setup
+### Basic
+- Install pyaudio
+- Uninstall pulseaudio
+- Download this repository
+- Set main.py to start on boot (run main.py as sudo)
 
-Demo in YouTube video: [Demo Video](https://youtu.be/0FDovuCira8)
+### Optional/Troubleshooting
+- Uninstall unnecessary software, disable GUI (speed up boot time)
+- Adjust sound levels in alsamixer (if signal is too quiet/loud)
+- Turn off WiFi (reduce noise/interference)
 
-## Installation Instructions
-(assumes a fresh install of Raspberry Pi OS)
+## User Manual
+### Begin Session
+- Press Track 1 Record Button to start looping. Track 1 will start recording.
+- Press Track 1 Record Button to stop recording. Track 1 will now loop.
 
-1. Clone this repository:
-    ```git clone https://github.com/RandomVertebrate/raspi-looper```
+## During Session
+- Press Record Button to arm a track for recording or overdubbing. Recording will start with the next loop of Track 1.
+- Press Record Button again to stop recording or overdubbing.
+- Press play button to mute or unmute track.
+- While track is playing, hold Record button to undo last overdub.
+- While track is muted, hold Record button to clear track.
 
-2. Install Python3-PyAudio:
-    ```sudo apt install python3-pyaudio```
-
-3. Check your volume settings in AlsaMixer (F6 changes device):
-    ```alsamixer``` (press escape to exit)
-
-4. Change to the raspi-looper directory:
-    ```cd raspi-looper```
-
-5. Make a note of your audio device numbers:
-    ```python3 devices.py```
-
-6. Configure Raspi-Looper settings:
-    ```python3 settings.py```
-    (Set latency to 100ms for now and use the device numbers from above)
-
-7. Find your latency:
-    ```python3 latency.py```
-
-8. Uninstall pulseaudio:
-    ```sudo apt remove pulseaudio```
-
-9. Configure auto-boot into Raspi-Looper (ctrl-x then y to save and exit):
-    ```sudo nano /home/pi/.bashrc```
-    Add the following lines at the end of the file:
-    >cd /home/pi/raspi-looper
-    
-    >sudo python3 main.py
+## After Session
+- Hold Track 1 Play Button to start new session.
+- Hold Track 2 Play Button to enter 'developer mode' (exit the looper script).
