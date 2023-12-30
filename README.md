@@ -34,13 +34,13 @@ See GPIO connections table and wiring diagram.
 - Press Track 1 Record Button to start looping. Track 1 will start recording.
 - Press Track 1 Record Button to stop recording. Track 1 will now loop.
 
-## During Session
+### During Session
 - Press Record Button to arm a track for recording or overdubbing. Recording will start with the next loop of Track 1.
 - Press Record Button again to stop recording or overdubbing.
 - Press play button to mute or unmute track.
 - While track is playing, hold Record button to undo last overdub.
 - While track is muted, hold Record button to clear track.
 
-## After Session
+### After Session
 - Hold Track 1 Play Button to start new session.
 - Hold Track 2 Play Button to enter 'developer mode' (exit the looper script).
