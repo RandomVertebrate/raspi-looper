@@ -35,7 +35,7 @@ See GPIO connections table and wiring diagram.
 - Press Track 1 Record Button to stop recording. Track 1 will now loop.
 
 ### During Session
-- Press Record Button to arm a track for recording or overdubbing. Recording will start with the next loop of Track 1.
+- Press Record Button to arm a track for recording or overdubbing. Recording will start on the next loop of Track 1.
 - Press Record Button again to stop recording or overdubbing.
 - Press play button to mute or unmute track.
 - While track is playing, hold Record button to undo last overdub.
