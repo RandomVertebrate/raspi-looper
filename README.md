@@ -12,7 +12,7 @@ Simple 4 track looper for Raspberry Pi. Uses pyaudio.
 ### Connections
 - Buttons and LEDs connect to GPIO.
 - Sound card plugs into full-size USB port on Raspberry Pi.
-- Looper input goes to sound card input AND to looper input 1 ("LIVE").
+- Looper input goes to sound card input AND to looper output 1 ("LIVE").
 - Soundcard output goes to looper output 2 ("LOOPS").
 
 See GPIO connections table and wiring diagram.
