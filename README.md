@@ -22,7 +22,8 @@ See GPIO connections table and wiring diagram.
 - Install pyaudio
 - Uninstall pulseaudio
 - Download this repository
-- Connect audio devices, run settings.py and latency.py
+- Connect audio devices
+- Run devices.py, settings.py and latency.py in order
 - Set main.py to start on boot (run main.py as sudo)
 
 ### Optional/Troubleshooting
